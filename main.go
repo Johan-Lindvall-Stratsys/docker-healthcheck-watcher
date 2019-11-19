@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	seenServiceIDs map[string]bool      = make(map[string]bool)
-	deadServiceIDs map[string]time.Time = make(map[string]time.Time)
+	showHealthForContainerIDs map[string]bool      = make(map[string]bool)
+	deadServiceIDs            map[string]time.Time = make(map[string]time.Time)
 )
 
 func onContainerDieFailure(service string, exitCode string, attributes map[string]string) {
@@ -69,30 +69,27 @@ func main() {
 }
 
 func handleMessage(msg events.Message) {
-	serviceID := getServiceID(msg.Actor.Attributes)
+	if msg.Type == events.ContainerEventType {
+		msg.Actor.Attributes["container_id"] = msg.Actor.ID
+		if msg.Action == "start" {
+			showHealthForContainerIDs[msg.Actor.ID] = false
+		} else if msg.Action == "health_status: unhealthy" {
+			showHealthForContainerIDs[msg.Actor.ID] = true
+			onContainerHealthCheckFailure(getServiceName(msg.Actor.Attributes), msg.Actor.Attributes)
+		} else if msg.Action == "health_status: healthy" {
+			if showHealth, ok := showHealthForContainerIDs[msg.Actor.ID]; !ok || showHealth {
+				onContainerHealthy(getServiceName(msg.Actor.Attributes), msg.Actor.Attributes)
+			}
+		} else if msg.Action == "die" {
+			serviceID := getServiceID(msg.Actor.Attributes)
+			exitCode := msg.Actor.Attributes["exitCode"]
 
-	if msg.Action == "health_status: unhealthy" {
-		seenServiceIDs[serviceID] = true
-		onContainerHealthCheckFailure(getServiceName(msg.Actor.Attributes), msg.Actor.Attributes)
-	}
-
-	if msg.Action == "health_status: healthy" {
-		if _, ok := seenServiceIDs[serviceID]; ok {
-			onContainerHealthy(getServiceName(msg.Actor.Attributes), msg.Actor.Attributes)
-		} else {
-			seenServiceIDs[serviceID] = true
-		}
-	}
-
-	if msg.Action == "die" {
-		seenServiceIDs[serviceID] = true
-		exitCode := msg.Actor.Attributes["exitCode"]
-
-		if exitCode != "0" {
-			now := time.Now()
-			if death, ok := deadServiceIDs[serviceID]; !ok || now.Sub(death) > 2*time.Minute {
-				deadServiceIDs[serviceID] = now
-				onContainerDieFailure(getServiceName(msg.Actor.Attributes), exitCode, msg.Actor.Attributes)
+			if exitCode != "0" {
+				now := time.Now()
+				if death, ok := deadServiceIDs[serviceID]; !ok || now.Sub(death) > 2*time.Minute {
+					deadServiceIDs[serviceID] = now
+					onContainerDieFailure(getServiceName(msg.Actor.Attributes), exitCode, msg.Actor.Attributes)
+				}
 			}
 		}
 	}
