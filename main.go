@@ -96,6 +96,7 @@ func main() {
 
 func startLogWatch(cli *client.Client, id string, attributes map[string]string) {
 	if _, ok := logWatchers[id]; !ok {
+		fmt.Printf("Starting log watch for %s\n", id)
 		ctx, cancel := context.WithCancel(context.Background())
 		logWatchers[id] = cancel
 
@@ -118,6 +119,7 @@ func startLogWatch(cli *client.Client, id string, attributes map[string]string) 
 
 func stopLogWatch(id string) {
 	if cancel, ok := logWatchers[id]; ok {
+		fmt.Printf("Stopping log watch for %s\n", id)
 		delete(logWatchers, id)
 		cancel()
 	}
