@@ -105,13 +105,9 @@ func startLogWatch(cli *client.Client, id string, attributes map[string]string) 
 			if err != nil {
 				return
 			}
-			lineReader := bufio.NewReader(reader)
-			for {
-				line, err := lineReader.ReadString('\n')
-				if err != nil {
-					break
-				}
-				onLogStdErr(line, getServiceName(attributes), attributes)
+			s := bufio.NewScanner(reader)
+			for s.Scan() {
+				onLogStdErr(s.Text(), getServiceName(attributes), attributes)
 			}
 		}()
 	}
