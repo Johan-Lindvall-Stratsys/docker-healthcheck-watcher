@@ -1,11 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"context"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -105,9 +107,18 @@ func startLogWatch(cli *client.Client, id string, attributes map[string]string) 
 			if err != nil {
 				return
 			}
-			s := bufio.NewScanner(reader)
-			for s.Scan() {
-				onLogStdErr(s.Text(), getServiceName(attributes), attributes)
+			header := make([]byte, 8)
+			for {
+				if _, err := io.ReadFull(reader, header); err != nil {
+					break
+				}
+				count := binary.BigEndian.Uint32(header[4:])
+				data := make([]byte, count)
+				if _, err = io.ReadFull(reader, data); err == nil {
+					onLogStdErr(strings.TrimSpace(string(data)), getServiceName(attributes), attributes)
+				} else {
+					break
+				}
 			}
 		}()
 	}
