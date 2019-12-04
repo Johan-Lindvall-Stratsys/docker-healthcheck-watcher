@@ -22,6 +22,7 @@ import (
 var (
 	showHealthForContainerIDs map[string]bool               = make(map[string]bool)
 	deadServiceIDs            map[string]time.Time          = make(map[string]time.Time)
+	updatingServiceIDS        map[string]time.Time          = make(map[string]time.Time)
 	logWatchers               map[string]context.CancelFunc = make(map[string]context.CancelFunc)
 )
 
@@ -133,7 +134,15 @@ func stopLogWatch(id string) {
 }
 
 func handleMessage(cli *client.Client, msg events.Message) {
-	if msg.Type == events.ContainerEventType {
+	if msg.Type == "service" && msg.Action == "update" {
+		if new, ok := msg.Actor.Attributes["updatestate.new"]; ok {
+			if new == "updating" {
+				updatingServiceIDS[msg.Actor.ID] = time.Now()
+			} else {
+				delete(updatingServiceIDS, msg.Actor.ID)
+			}
+		}
+	} else if msg.Type == events.ContainerEventType {
 		msg.Actor.Attributes["container_id"] = msg.Actor.ID
 		if msg.Action == "start" {
 			showHealthForContainerIDs[msg.Actor.ID] = false
@@ -154,7 +163,9 @@ func handleMessage(cli *client.Client, msg events.Message) {
 
 			if exitCode != "0" {
 				now := time.Now()
-				if death, ok := deadServiceIDs[serviceID]; !ok || now.Sub(death) > 2*time.Minute {
+				if updating, ok := updatingServiceIDS[serviceID]; ok && exitCode == "1" && now.Sub(updating) < 2*time.Minute {
+					delete(updatingServiceIDS, serviceID)
+				} else if death, ok := deadServiceIDs[serviceID]; !ok || now.Sub(death) > 2*time.Minute {
 					deadServiceIDs[serviceID] = now
 					onContainerDieFailure(getServiceName(msg.Actor.Attributes), exitCode, msg.Actor.Attributes)
 				}
