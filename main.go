@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -133,6 +134,8 @@ func stopLogWatch(id string) {
 }
 
 func handleMessage(cli *client.Client, msg events.Message) {
+	t, _ := json.Marshal(msg)
+	fmt.Printf("msg %s\n", t)
 	if msg.Type == events.ContainerEventType {
 		msg.Actor.Attributes["container_id"] = msg.Actor.ID
 		if msg.Action == "start" {
