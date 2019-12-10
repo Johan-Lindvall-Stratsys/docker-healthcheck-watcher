@@ -1,0 +1,21 @@
+version: '3.5'
+
+services:
+  watcher:
+    image: "${HEALTHCHECK_WATCHER_IMAGE}"
+    command: /run/secrets/healthcheck_secrets
+    hostname: "{{.Node.Hostname}}"
+    environment:
+      MS_TEAMS_CARD_SUBJECT: "Docker Healthcheck ${ENVIRONMENT}"
+      STDERR_SERVICE: "heimdall_heimdall"
+      FOO: "BAR"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      mode: global
+    secrets:
+      - healthcheck_secrets
+
+secrets:
+  healthcheck_secrets:
+    external: true
